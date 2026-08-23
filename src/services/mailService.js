@@ -61,46 +61,68 @@ export class MailService {
   }
 
   /**
-   * Creates a new temporary mailbox account.
+   * Creates a new temporary mailbox account with retry logic on username collision.
    */
   async createAccount(customUsername = null, selectedDomain = null) {
     const domains = await this.getDomains();
     const domain = selectedDomain && domains.includes(selectedDomain) ? selectedDomain : domains[0];
 
-    const username = customUsername 
-      ? customUsername.toLowerCase().replace(/[^a-z0-9._-]/g, '')
-      : 'venom_' + crypto.randomBytes(4).toString('hex');
+    const isCustom = Boolean(customUsername);
+    let attempts = 0;
+    const maxAttempts = isCustom ? 1 : 3;
 
-    const address = `${username}@${domain}`;
-    const password = 'Vn_' + crypto.randomBytes(8).toString('hex') + '!';
+    while (attempts < maxAttempts) {
+      attempts++;
+      const username = isCustom 
+        ? customUsername.toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, 30)
+        : 'venom_' + crypto.randomBytes(4).toString('hex');
 
-    const client = await this.getAxios();
+      if (!username) {
+        throw new Error('Invalid username. Please use letters, numbers, dots, or underscores.');
+      }
 
-    try {
-      // 1. Create account
-      const createRes = await client.post('/accounts', { address, password });
-      const accountId = createRes.data.id;
+      const address = `${username}@${domain}`;
+      const password = 'Vn_' + crypto.randomBytes(8).toString('hex') + '!';
+      const client = await this.getAxios();
 
-      // 2. Obtain Token
-      const tokenRes = await client.post('/token', { address, password });
-      const token = tokenRes.data.token;
+      try {
+        // 1. Create account
+        const createRes = await client.post('/accounts', { address, password });
+        const accountId = createRes.data.id;
 
-      return {
-        id: accountId,
-        address,
-        password,
-        token,
-        domain,
-        createdAt: Date.now()
-      };
-    } catch (err) {
-      const errMsg = err.response?.data?.message || err.message;
-      throw new Error(`Failed to create account: ${errMsg}`);
+        // 2. Obtain Token
+        const tokenRes = await client.post('/token', { address, password });
+        const token = tokenRes.data.token;
+
+        return {
+          id: accountId,
+          address,
+          password,
+          token,
+          domain,
+          createdAt: Date.now()
+        };
+      } catch (err) {
+        const isTaken = err.response?.status === 422 || (err.response?.data?.message && err.response.data.message.includes('used'));
+        
+        if (isTaken) {
+          if (isCustom) {
+            throw new Error(`The username "${username}" is already taken on @${domain}. Please try another name or switch domain.`);
+          }
+          // For random usernames, loop again to generate a new random hash
+          continue;
+        }
+
+        const errMsg = err.response?.data?.message || err.message;
+        throw new Error(`Account creation failed: ${errMsg}`);
+      }
     }
+
+    throw new Error('Failed to create a unique email address. Please try again.');
   }
 
   /**
-   * Fetches the list of incoming messages for an account.
+   * Fetches incoming messages for an account.
    */
   async getMessages(token) {
     if (!token) return [];
@@ -111,7 +133,10 @@ export class MailService {
       });
       return res.data['hydra:member'] || [];
     } catch (err) {
-      console.error('[MailService] Error fetching messages:', err.response?.data?.message || err.message);
+      // 401 Unauthorized means token expired
+      if (err.response?.status === 401) {
+        throw new Error('UNAUTHORIZED');
+      }
       return [];
     }
   }
@@ -128,7 +153,6 @@ export class MailService {
       });
       return res.data;
     } catch (err) {
-      console.error(`[MailService] Error fetching message ${messageId}:`, err.response?.data?.message || err.message);
       return null;
     }
   }
@@ -144,8 +168,7 @@ export class MailService {
         headers: { Authorization: `Bearer ${token}` }
       });
       return true;
-    } catch (err) {
-      console.error(`[MailService] Error deleting message ${messageId}:`, err.message);
+    } catch {
       return false;
     }
   }
@@ -161,8 +184,7 @@ export class MailService {
         headers: { Authorization: `Bearer ${token}` }
       });
       return true;
-    } catch (err) {
-      console.error(`[MailService] Error deleting account ${accountId}:`, err.message);
+    } catch {
       return false;
     }
   }

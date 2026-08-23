@@ -61,16 +61,17 @@ export class Keyboards {
   static emailActions(parsed) {
     const rows = [];
 
-    // If there is a verification link, add an external URL button
-    if (parsed.verifyLink) {
+    // If there is a verification link, add an external URL button (safe URL validation)
+    if (parsed.verifyLink && (parsed.verifyLink.startsWith('http://') || parsed.verifyLink.startsWith('https://'))) {
       rows.push([
         Markup.button.url('🔗 1-Tap Verify Link', parsed.verifyLink)
       ]);
     }
 
+    // Message ID is 24-char hex, safely fits Telegram 64-byte limit
     rows.push([
-      Markup.button.callback('📄 View Full Email', `btn_view_msg_${parsed.id}`),
-      Markup.button.callback('🗑️ Delete', `btn_del_msg_${parsed.id}`)
+      Markup.button.callback('📄 View Full Email', `btn_view_${parsed.id}`),
+      Markup.button.callback('🗑️ Delete', `btn_del_${parsed.id}`)
     ]);
 
     rows.push([
@@ -81,24 +82,24 @@ export class Keyboards {
   }
 
   /**
-   * Domain selection keyboard
+   * Domain selection keyboard (Safe callback length)
    */
   static domainList(domains = []) {
-    const rows = domains.map(d => [
-      Markup.button.callback(`@${d}`, `btn_set_domain_${d}`)
+    const rows = domains.map((d, index) => [
+      Markup.button.callback(`@${d}`, `btn_set_dm_${index}`)
     ]);
     rows.push([Markup.button.callback('⬅️ Back to Menu', 'btn_main_menu')]);
     return Markup.inlineKeyboard(rows);
   }
 
   /**
-   * User accounts list keyboard for switching
+   * User accounts list keyboard for switching (Uses safe ID)
    */
   static accountsList(accounts = [], activeEmail = '') {
     const rows = accounts.map(acc => {
       const isCurrent = acc.address === activeEmail;
       const label = `${isCurrent ? '✅ ' : ''}${acc.address}`;
-      return [Markup.button.callback(label, `btn_switch_${acc.address}`)];
+      return [Markup.button.callback(label, `btn_sw_${acc.id}`)];
     });
 
     rows.push([

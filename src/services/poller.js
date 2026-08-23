@@ -43,7 +43,7 @@ export class InboxPoller {
     const activeAccounts = db.getAllActiveAccounts();
     if (!activeAccounts || activeAccounts.length === 0) return;
 
-    // Process accounts concurrently in batches of 5 to avoid socket throttling
+    // Process in batches of 5
     const batchSize = 5;
     for (let i = 0; i < activeAccounts.length; i += batchSize) {
       const batch = activeAccounts.slice(i, i + batchSize);
@@ -75,21 +75,35 @@ export class InboxPoller {
         const text = Messages.newEmailNotification(account.address, parsed);
         const keyboard = Keyboards.emailActions(parsed);
 
-        // Send to user
-        await this.bot.telegram.sendMessage(account.userId, text, {
-          parse_mode: 'HTML',
-          disable_web_page_preview: false,
-          ...keyboard
-        });
+        // Send to user with fallback in case of HTML entity parser edge-cases
+        try {
+          await this.bot.telegram.sendMessage(account.userId, text, {
+            parse_mode: 'HTML',
+            disable_web_page_preview: false,
+            ...keyboard
+          });
+        } catch (sendErr) {
+          // If HTML entity failed, retry in plain text
+          if (sendErr.message && sendErr.message.includes("can't parse entities")) {
+            console.warn('[Poller] HTML entity issue, falling back to plain text delivery...');
+            const plainText = `⚡ NEW EMAIL RECEIVED\n\nTo: ${account.address}\nFrom: ${parsed.sender}\nSubject: ${parsed.subject}\n${parsed.otp ? `\n🔑 OTP: ${parsed.otp}\n` : ''}\nSnippet:\n${parsed.preview}`;
+            await this.bot.telegram.sendMessage(account.userId, plainText, { ...keyboard });
+          } else if (sendErr.response?.error_code === 403) {
+            // User blocked the bot
+            console.warn(`[Poller] User ${account.userId} blocked the bot. Skipping.`);
+            return;
+          } else {
+            throw sendErr;
+          }
+        }
 
         console.log(`[Poller] Dispatched new email to user ${account.userId} (OTP: ${parsed.otp || 'None'})`);
       }
     } catch (err) {
-      // If token expired or account removed, quietly skip
-      if (err.response?.status === 401) {
-        console.warn(`[Poller] Account ${account.address} unauthorized/expired.`);
+      if (err.message === 'UNAUTHORIZED' || err.response?.status === 401) {
+        console.warn(`[Poller] Token expired for ${account.address}.`);
       } else {
-        console.error(`[Poller] Failed to check inbox for ${account.address}:`, err.message);
+        console.error(`[Poller] Failed inbox check for ${account.address}:`, err.message);
       }
     }
   }

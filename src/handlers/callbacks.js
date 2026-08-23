@@ -95,9 +95,12 @@ export class CallbackHandlers {
       }
     });
 
-    // Set Domain & Generate
-    bot.action(/^btn_set_domain_(.+)$/, async (ctx) => {
-      const selectedDomain = ctx.match[1];
+    // Set Domain & Generate by Index
+    bot.action(/^btn_set_dm_(\d+)$/, async (ctx) => {
+      const domainIndex = parseInt(ctx.match[1], 10);
+      const domains = await mailService.getDomains();
+      const selectedDomain = domains[domainIndex] || domains[0];
+
       await ctx.answerCbQuery(`Selected @${selectedDomain}`);
       const userId = ctx.from.id;
 
@@ -132,17 +135,24 @@ export class CallbackHandlers {
       });
     });
 
-    // Switch Active Account
-    bot.action(/^btn_switch_(.+)$/, async (ctx) => {
-      const emailAddress = ctx.match[1];
+    // Switch Active Account by Account ID
+    bot.action(/^btn_sw_(.+)$/, async (ctx) => {
+      const accountId = ctx.match[1];
       const userId = ctx.from.id;
-      db.setActiveEmail(userId, emailAddress);
-      await ctx.answerCbQuery(`Switched to ${emailAddress}`);
+      const user = db.getUser(userId);
 
-      const text = Messages.emailCreated(emailAddress);
+      const targetAccount = user?.accounts?.find(a => a.id === accountId);
+      if (!targetAccount) {
+        return ctx.answerCbQuery('Inbox not found');
+      }
+
+      db.setActiveEmail(userId, targetAccount.address);
+      await ctx.answerCbQuery(`Switched to ${targetAccount.address}`);
+
+      const text = Messages.emailCreated(targetAccount.address);
       await editMessageTextSafe(ctx, text, {
         parse_mode: 'HTML',
-        ...Keyboards.emailActiveCard(emailAddress)
+        ...Keyboards.emailActiveCard(targetAccount.address)
       });
     });
 
@@ -170,7 +180,7 @@ export class CallbackHandlers {
     });
 
     // View Full Message Details
-    bot.action(/^btn_view_msg_(.+)$/, async (ctx) => {
+    bot.action(/^btn_view_(.+)$/, async (ctx) => {
       const msgId = ctx.match[1];
       const userId = ctx.from.id;
       const activeAcc = db.getActiveAccount(userId);
@@ -189,17 +199,23 @@ export class CallbackHandlers {
         const parsed = OtpExtractor.parseEmail(fullMsg);
         const text = Messages.fullEmailView(parsed);
 
-        await ctx.reply(text, {
-          parse_mode: 'HTML',
-          ...Keyboards.emailActions(parsed)
-        });
+        try {
+          await ctx.reply(text, {
+            parse_mode: 'HTML',
+            ...Keyboards.emailActions(parsed)
+          });
+        } catch (sendErr) {
+          // Plain text fallback if HTML parsing fails
+          const plain = `📄 FULL EMAIL CONTENT\n\nFrom: ${parsed.sender}\nSubject: ${parsed.subject}\nDate: ${new Date(parsed.createdAt).toLocaleString()}\n\n${parsed.fullText.slice(0, 2800)}`;
+          await ctx.reply(plain, Keyboards.emailActions(parsed));
+        }
       } catch (err) {
         await ctx.reply(`❌ Failed to view message: ${err.message}`);
       }
     });
 
     // Delete Individual Message
-    bot.action(/^btn_del_msg_(.+)$/, async (ctx) => {
+    bot.action(/^btn_del_(.+)$/, async (ctx) => {
       const msgId = ctx.match[1];
       const userId = ctx.from.id;
       const activeAcc = db.getActiveAccount(userId);

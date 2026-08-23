@@ -1,9 +1,11 @@
 export class Messages {
   static escapeHtml(str = '') {
+    if (!str) return '';
     return String(str)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   static getTimeString() {
@@ -11,13 +13,13 @@ export class Messages {
   }
 
   static welcome(user, activeEmail = null) {
-    const name = this.escapeHtml(user.first_name || 'User');
+    const name = this.escapeHtml(user?.first_name || 'User');
     return `
 ⚡ <b>VENOM TEMP MAIL — Instant Disposable Inbox & OTP Extractor</b>
 
 Hey <b>${name}</b>! Protect your real identity and bypass email verifications effortlessly.
 
-${activeEmail ? `📬 <b>Active Email:</b>\n<code>${activeEmail}</code>\n<i>(Tap above to copy)</i>` : '👉 <i>You don’t have an active disposable inbox yet. Click below to generate one instantly!</i>'}
+${activeEmail ? `📬 <b>Active Email:</b>\n<code>${this.escapeHtml(activeEmail)}</code>\n<i>(Tap above to copy)</i>` : '👉 <i>You don’t have an active disposable inbox yet. Click below to generate one instantly!</i>'}
 
 ✨ <b>Features:</b>
 • ⚡ <b>Instant Provisioning:</b> 1-click disposable email address.
@@ -29,11 +31,12 @@ ${activeEmail ? `📬 <b>Active Email:</b>\n<code>${activeEmail}</code>\n<i>(Tap
   }
 
   static emailCreated(address) {
+    const safeAddress = this.escapeHtml(address);
     return `
 🎉 <b>New Disposable Email Ready!</b>
 
 📬 <b>Address:</b>
-<code>${address}</code>
+<code>${safeAddress}</code>
 <i>(Tap the address above to copy to clipboard)</i>
 
 ⏳ <b>Status:</b> 🟢 Active & Watching for incoming emails...
@@ -42,16 +45,17 @@ ${activeEmail ? `📬 <b>Active Email:</b>\n<code>${activeEmail}</code>\n<i>(Tap
   }
 
   static newEmailNotification(address, parsed) {
+    const safeAddress = this.escapeHtml(address);
     let text = `⚡ <b>NEW EMAIL RECEIVED</b>\n`;
     text += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    text += `📬 <b>To:</b> <code>${address}</code>\n`;
+    text += `📬 <b>To:</b> <code>${safeAddress}</code>\n`;
     text += `👤 <b>From:</b> <code>${this.escapeHtml(parsed.sender)}</code>\n`;
-    text += `📝 <b>Subject:</b> <b>${this.escapeHtml(parsed.subject)}</b>\n`;
+    text += `📝 <b>Subject:</b> <b>${this.escapeHtml(parsed.subject || '(No Subject)')}</b>\n`;
 
     if (parsed.otp) {
       text += `━━━━━━━━━━━━━━━━━━━━━\n`;
       text += `🔑 <b>EXTRACTED OTP CODE:</b>\n`;
-      text += `👉 <code>${parsed.otp}</code> 👈\n`;
+      text += `👉 <code>${this.escapeHtml(parsed.otp)}</code> 👈\n`;
       text += `<i>(Tap code above to copy instantly)</i>\n`;
     }
 
@@ -61,7 +65,8 @@ ${activeEmail ? `📬 <b>Active Email:</b>\n<code>${activeEmail}</code>\n<i>(Tap
     }
 
     text += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    text += `📄 <b>Snippet:</b>\n<i>${this.escapeHtml(parsed.preview)}</i>\n`;
+    const preview = (parsed.preview || '').slice(0, 250);
+    text += `📄 <b>Snippet:</b>\n<i>${this.escapeHtml(preview)}</i>\n`;
 
     return text.trim();
   }
@@ -70,24 +75,29 @@ ${activeEmail ? `📬 <b>Active Email:</b>\n<code>${activeEmail}</code>\n<i>(Tap
     let text = `📄 <b>FULL EMAIL CONTENT</b>\n`;
     text += `━━━━━━━━━━━━━━━━━━━━━\n`;
     text += `👤 <b>From:</b> ${this.escapeHtml(parsed.sender)}\n`;
-    text += `📝 <b>Subject:</b> ${this.escapeHtml(parsed.subject)}\n`;
-    text += `📅 <b>Date:</b> ${new Date(parsed.createdAt).toLocaleString()}\n`;
+    text += `📝 <b>Subject:</b> ${this.escapeHtml(parsed.subject || '(No Subject)')}\n`;
+    text += `📅 <b>Date:</b> ${this.escapeHtml(new Date(parsed.createdAt).toLocaleString())}\n`;
     if (parsed.otp) {
-      text += `🔑 <b>OTP:</b> <code>${parsed.otp}</code>\n`;
+      text += `🔑 <b>OTP:</b> <code>${this.escapeHtml(parsed.otp)}</code>\n`;
     }
     text += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
-    const body = (parsed.fullText || '(Empty message)').slice(0, 3500);
-    text += this.escapeHtml(body);
+    // Cap text to 2800 characters to strictly stay within Telegram limit
+    let body = parsed.fullText || '(Empty message)';
+    if (body.length > 2800) {
+      body = body.slice(0, 2800) + '\n\n... [Content truncated due to size]';
+    }
 
+    text += this.escapeHtml(body);
     return text.trim();
   }
 
   static inboxEmpty(address) {
     const time = this.getTimeString();
+    const safeAddress = this.escapeHtml(address);
     return `
 📬 <b>Active Disposable Inbox:</b>
-<code>${address}</code>
+<code>${safeAddress}</code>
 
 📭 <b>Inbox is empty.</b>
 No messages received yet. The bot is actively watching!
@@ -98,9 +108,10 @@ No messages received yet. The bot is actively watching!
 
   static inboxList(address, count) {
     const time = this.getTimeString();
+    const safeAddress = this.escapeHtml(address);
     return `
 📬 <b>Inbox (${count} message${count > 1 ? 's' : ''}):</b>
-<code>${address}</code>
+<code>${safeAddress}</code>
 
 <i>Latest emails are automatically pushed as notifications.</i>
 

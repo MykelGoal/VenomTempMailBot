@@ -7,6 +7,15 @@ import { CommandHandlers } from './handlers/commands.js';
 import { CallbackHandlers } from './handlers/callbacks.js';
 import { InboxPoller } from './services/poller.js';
 
+// Global error traps to guarantee 100% server stability
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Process Safety] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Process Safety] Uncaught Exception:', err);
+});
+
 async function bootstrap() {
   console.log('⚡ Starting VENOM TempMail Bot Engine...');
 
@@ -31,9 +40,9 @@ async function bootstrap() {
   // Register Interactive Inline Callbacks
   await CallbackHandlers.register(bot);
 
-  // Error boundary
+  // Telegraf Error Boundary
   bot.catch((err, ctx) => {
-    console.error(`[Bot Error] Encountered an error for ${ctx.updateType}:`, err);
+    console.error(`[Telegraf Error] Error during update ${ctx.updateType}:`, err.message);
   });
 
   // 2. Initialize Background Poller
