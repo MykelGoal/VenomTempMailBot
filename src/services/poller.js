@@ -15,7 +15,7 @@ export class InboxPoller {
   start() {
     if (this.isRunning) return;
     this.isRunning = true;
-    console.log(`[Poller] Live inbox watchdog active (Polling interval: ${config.pollIntervalMs}ms)`);
+    console.log(`[Poller] Live inbox watchdog active across 6 networks (Interval: ${config.pollIntervalMs}ms)`);
     this.tick();
   }
 
@@ -43,7 +43,6 @@ export class InboxPoller {
     const activeAccounts = db.getAllActiveAccounts();
     if (!activeAccounts || activeAccounts.length === 0) return;
 
-    // Process in batches
     const batchSize = 5;
     for (let i = 0; i < activeAccounts.length; i += batchSize) {
       const batch = activeAccounts.slice(i, i + batchSize);
@@ -53,19 +52,20 @@ export class InboxPoller {
 
   async checkUserInbox(account) {
     try {
-      const messages = await mailService.getMessages(account.token, account.apiBase);
+      const messages = await mailService.getMessages(account);
       if (!messages || messages.length === 0) return;
 
       for (const msgSummary of messages) {
-        if (db.isMessageSeen(msgSummary.id)) continue;
+        const messageKey = `${account.address}_${msgSummary.id}`;
+        if (db.isMessageSeen(messageKey)) continue;
 
         // Fetch full email content
-        const fullMsg = await mailService.getMessageDetails(account.token, msgSummary.id, account.apiBase);
+        const fullMsg = await mailService.getMessageDetails(account, msgSummary.id);
         if (!fullMsg) continue;
 
         // Parse with OTP Extractor
         const parsed = OtpExtractor.parseEmail(fullMsg);
-        db.markMessageSeen(msgSummary.id);
+        db.markMessageSeen(messageKey);
 
         if (parsed.otp) {
           db.incrementOtpCount();
@@ -87,20 +87,18 @@ export class InboxPoller {
             const plainText = `⚡ NEW EMAIL RECEIVED\n\nTo: ${account.address}\nFrom: ${parsed.sender}\nSubject: ${parsed.subject}\n${parsed.otp ? `\n🔑 OTP: ${parsed.otp}\n` : ''}\nSnippet:\n${parsed.preview}`;
             await this.bot.telegram.sendMessage(account.userId, plainText, { ...keyboard });
           } else if (sendErr.response?.error_code === 403) {
-            console.warn(`[Poller] User ${account.userId} blocked the bot. Skipping.`);
+            console.warn(`[Poller] User ${account.userId} blocked the bot.`);
             return;
           } else {
             throw sendErr;
           }
         }
 
-        console.log(`[Poller] Dispatched new email to user ${account.userId} (OTP: ${parsed.otp || 'None'})`);
+        console.log(`[Poller] Delivered email to ${account.userId} for ${account.address} (OTP: ${parsed.otp || 'None'})`);
       }
     } catch (err) {
-      if (err.message === 'UNAUTHORIZED') {
-        console.warn(`[Poller] Token expired for ${account.address}.`);
-      } else {
-        console.error(`[Poller] Inbox check failed for ${account.address}:`, err.message);
+      if (err.message !== 'UNAUTHORIZED') {
+        console.error(`[Poller] Inbox check error for ${account.address}:`, err.message);
       }
     }
   }

@@ -31,7 +31,7 @@ export class OtpExtractor {
       /(?:code|pin)\s*(?:is|:|-|\s)\s*([0-9]{4,8})/i,
       /(?:use|enter)\s*(?:the)?\s*(?:code|pin)?\s*([0-9]{4,8})\s*(?:to|as|for)/i,
       /([0-9]{3,4}[-\s][0-9]{3,4})/, // formatted like 123-456 or 123 456
-      /(?:G-|FB-|TW-|TG-)([0-9]{4,8})/i // Google, Facebook, Twitter, Telegram prefixes
+      /(?:G-|FB-|TW-|TG-)([0-9]{4,8})/i
     ];
 
     for (const pattern of contextPatterns) {
@@ -44,19 +44,18 @@ export class OtpExtractor {
       }
     }
 
-    // 2. Check subject specifically for isolated digits (e.g., "Your code 783921" or "982314 is your Netflix code")
+    // 2. Check subject specifically for isolated digits
     const subjectMatch = subject.match(/\b([0-9]{4,8})\b/);
     if (subjectMatch && subjectMatch[1]) {
       return subjectMatch[1];
     }
 
-    // 3. Fallback: Search for standalone 4 to 8 digit numbers surrounded by boundaries
+    // 3. Fallback: Search for standalone 4 to 8 digit numbers
     const standaloneMatch = text.match(/\b([0-9]{4,8})\b/);
     if (standaloneMatch && standaloneMatch[1]) {
-      // Ignore common 4-digit years like 2024, 2025, 2026 if they appear in dates
       const num = standaloneMatch[1];
       if (num.length === 4 && (num.startsWith('19') || num.startsWith('20'))) {
-        // likely a year, skip unless explicitly labelled
+        // Skip year
       } else {
         return num;
       }
@@ -70,8 +69,6 @@ export class OtpExtractor {
    */
   static extractVerificationLink(html = '', text = '') {
     const content = `${html} ${text}`;
-    
-    // Look for links containing verification keywords
     const urlRegex = /https?:\/\/[^\s"'<>]+/gi;
     const links = content.match(urlRegex) || [];
 
@@ -92,28 +89,32 @@ export class OtpExtractor {
   }
 
   /**
-   * Summarizes an incoming email with all extracted intelligence.
+   * Adapts & parses emails from Mail.tm, Mail.gw, or GuerrillaMail formats.
    */
   static parseEmail(message) {
-    const rawText = message.text || (message.html ? this.cleanHtml(message.html) : (message.intro || ''));
-    const subject = message.subject || '(No Subject)';
-    const sender = message.from ? `${message.from.name ? message.from.name + ' ' : ''}<${message.from.address}>` : 'Unknown Sender';
-    const otp = this.extractOtp(subject, rawText);
-    const verifyLink = this.extractVerificationLink(message.html || '', rawText);
+    // Normalizes fields across providers
+    const sender = message.from 
+      ? (message.from.name ? `${message.from.name} <${message.from.address}>` : message.from.address) 
+      : (message.mail_from || 'Unknown Sender');
 
-    // Cleaned snippet (up to 300 chars)
-    const preview = rawText.replace(/\s+/g, ' ').trim().slice(0, 300);
+    const subject = message.subject || message.mail_subject || '(No Subject)';
+    const html = message.html || message.mail_body || '';
+    const rawText = message.text || this.cleanHtml(html) || message.mail_excerpt || message.intro || '';
+
+    const otp = this.extractOtp(subject, rawText);
+    const verifyLink = this.extractVerificationLink(html, rawText);
+    const preview = rawText.replace(/\s+/g, ' ').trim().slice(0, 250);
 
     return {
-      id: message.id,
+      id: String(message.id || message.mail_id),
       sender,
       subject,
       otp,
       verifyLink,
       preview,
       fullText: rawText,
-      createdAt: message.createdAt || new Date().toISOString(),
-      hasAttachments: Boolean(message.hasAttachments)
+      createdAt: message.createdAt || message.mail_date || new Date().toISOString(),
+      hasAttachments: Boolean(message.hasAttachments || message.att)
     };
   }
 }

@@ -47,7 +47,7 @@ export class CallbackHandlers {
       }
 
       try {
-        const messages = await mailService.getMessages(activeAcc.token, activeAcc.apiBase);
+        const messages = await mailService.getMessages(activeAcc);
         const time = new Date().toLocaleTimeString('en-US', { hour12: false });
         
         if (!messages || messages.length === 0) {
@@ -61,11 +61,12 @@ export class CallbackHandlers {
 
           // Deliver any unseen message immediately
           for (const m of messages) {
-            if (!db.isMessageSeen(m.id)) {
-              const fullMsg = await mailService.getMessageDetails(activeAcc.token, m.id, activeAcc.apiBase);
+            const messageKey = `${activeAcc.address}_${m.id}`;
+            if (!db.isMessageSeen(messageKey)) {
+              const fullMsg = await mailService.getMessageDetails(activeAcc, m.id);
               if (fullMsg) {
                 const parsed = OtpExtractor.parseEmail(fullMsg);
-                db.markMessageSeen(m.id);
+                db.markMessageSeen(messageKey);
                 if (parsed.otp) db.incrementOtpCount();
                 const notifText = Messages.newEmailNotification(activeAcc.address, parsed);
                 await ctx.reply(notifText, {
@@ -182,7 +183,7 @@ export class CallbackHandlers {
       }
 
       await ctx.answerCbQuery('Deleting...');
-      mailService.deleteAccount(activeAcc.token, activeAcc.id, activeAcc.apiBase).catch(() => {});
+      mailService.deleteAccount(activeAcc).catch(() => {});
       db.deleteAccount(userId, activeAcc.address);
 
       const activeNow = db.getActiveAccount(userId);
@@ -206,7 +207,7 @@ export class CallbackHandlers {
 
       await ctx.answerCbQuery('Loading full email...');
       try {
-        const fullMsg = await mailService.getMessageDetails(activeAcc.token, msgId, activeAcc.apiBase);
+        const fullMsg = await mailService.getMessageDetails(activeAcc, msgId);
         if (!fullMsg) {
           return ctx.reply('⚠️ Message is no longer available on the server.');
         }
@@ -235,7 +236,7 @@ export class CallbackHandlers {
       const activeAcc = db.getActiveAccount(userId);
 
       if (activeAcc) {
-        mailService.deleteMessage(activeAcc.token, msgId, activeAcc.apiBase).catch(() => {});
+        mailService.deleteMessage(activeAcc, msgId).catch(() => {});
       }
 
       await ctx.answerCbQuery('Message deleted');

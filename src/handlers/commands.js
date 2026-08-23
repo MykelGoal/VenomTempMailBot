@@ -87,7 +87,7 @@ export class CommandHandlers {
 
     await ctx.replyWithChatAction('typing');
     try {
-      const messages = await mailService.getMessages(activeAcc.token, activeAcc.apiBase);
+      const messages = await mailService.getMessages(activeAcc);
       if (!messages || messages.length === 0) {
         return ctx.reply(Messages.inboxEmpty(activeAcc.address), {
           parse_mode: 'HTML',
@@ -95,13 +95,14 @@ export class CommandHandlers {
         });
       }
 
-      // Check if any message is unseen and notify
+      // Check if any message is unseen and deliver notification
       for (const m of messages) {
-        if (!db.isMessageSeen(m.id)) {
-          const fullMsg = await mailService.getMessageDetails(activeAcc.token, m.id, activeAcc.apiBase);
+        const messageKey = `${activeAcc.address}_${m.id}`;
+        if (!db.isMessageSeen(messageKey)) {
+          const fullMsg = await mailService.getMessageDetails(activeAcc, m.id);
           if (fullMsg) {
             const parsed = OtpExtractor.parseEmail(fullMsg);
-            db.markMessageSeen(m.id);
+            db.markMessageSeen(messageKey);
             if (parsed.otp) db.incrementOtpCount();
             const notifText = Messages.newEmailNotification(activeAcc.address, parsed);
             await ctx.reply(notifText, {
@@ -131,7 +132,7 @@ export class CommandHandlers {
       return ctx.reply('⚠️ No active email to delete.');
     }
 
-    mailService.deleteAccount(activeAcc.token, activeAcc.id, activeAcc.apiBase).catch(() => {});
+    mailService.deleteAccount(activeAcc).catch(() => {});
     db.deleteAccount(userId, activeAcc.address);
 
     return ctx.reply(`🗑️ <b>Deleted:</b> <code>${activeAcc.address}</code>\n\nYour inbox has been wiped.`, {
@@ -155,7 +156,7 @@ export class CommandHandlers {
 ⏱️ <b>Server Uptime:</b> <code>${hours}h ${mins}m</code>
 👥 <b>Total Users:</b> <code>${stats.totalUsers}</code>
 🔑 <b>OTPs Delivered:</b> <code>${stats.totalOtpsExtracted}</code>
-🟢 <b>Watchdog Engine:</b> <code>Running (4s interval)</code>
+🟢 <b>Watchdog Engine:</b> <code>6 Active Multi-Domains</code>
 ━━━━━━━━━━━━━━━━━━━━━
 <i>Ready to receive emails & verification codes 24/7.</i>
 `.trim();
