@@ -4,6 +4,20 @@ import { OtpExtractor } from '../services/otpExtractor.js';
 import { Messages } from '../ui/messages.js';
 import { Keyboards } from '../ui/keyboards.js';
 
+/**
+ * Safely edits message text and ignores Telegram's 'message is not modified' error.
+ */
+async function editMessageTextSafe(ctx, text, extra = {}) {
+  try {
+    return await ctx.editMessageText(text, extra);
+  } catch (err) {
+    if (err.message && err.message.includes('message is not modified')) {
+      return; // Safe to ignore
+    }
+    throw err;
+  }
+}
+
 export class CallbackHandlers {
   static async register(bot) {
     // Generate Random
@@ -14,7 +28,7 @@ export class CallbackHandlers {
         const account = await mailService.createAccount();
         db.saveAccount(userId, account);
         const text = Messages.emailCreated(account.address);
-        await ctx.editMessageText(text, {
+        await editMessageTextSafe(ctx, text, {
           parse_mode: 'HTML',
           ...Keyboards.emailActiveCard(account.address)
         });
@@ -25,38 +39,43 @@ export class CallbackHandlers {
 
     // Refresh Inbox
     bot.action('btn_refresh_inbox', async (ctx) => {
-      await ctx.answerCbQuery('🔄 Checking inbox...');
       const userId = ctx.from.id;
       const activeAcc = db.getActiveAccount(userId);
 
       if (!activeAcc) {
-        return ctx.editMessageText('⚠️ No active email. Generate one first!', {
+        await ctx.answerCbQuery('No active email');
+        return editMessageTextSafe(ctx, '⚠️ No active email. Generate one first!', {
           ...Keyboards.mainMenu()
         });
       }
 
       try {
         const messages = await mailService.getMessages(activeAcc.token);
+        const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+        
         if (!messages || messages.length === 0) {
-          await ctx.editMessageText(Messages.inboxEmpty(activeAcc.address), {
+          await ctx.answerCbQuery(`📭 Inbox checked at ${time} (Empty)`);
+          await editMessageTextSafe(ctx, Messages.inboxEmpty(activeAcc.address), {
             parse_mode: 'HTML',
             ...Keyboards.emailActiveCard(activeAcc.address)
           });
         } else {
-          await ctx.editMessageText(`📬 <b>Inbox (${messages.length} message${messages.length > 1 ? 's' : ''}):</b>\n<code>${activeAcc.address}</code>\n\nLatest messages will appear below as real-time alerts.`, {
+          await ctx.answerCbQuery(`📬 ${messages.length} message(s) in inbox`);
+          await editMessageTextSafe(ctx, Messages.inboxList(activeAcc.address, messages.length), {
             parse_mode: 'HTML',
             ...Keyboards.emailActiveCard(activeAcc.address)
           });
         }
       } catch (err) {
-        await ctx.reply(`❌ Failed to refresh: ${err.message}`);
+        await ctx.answerCbQuery('Refresh failed');
+        console.error('[Callback] Error refreshing inbox:', err.message);
       }
     });
 
     // Custom Prompt
     bot.action('btn_custom_prompt', async (ctx) => {
       await ctx.answerCbQuery();
-      await ctx.editMessageText(Messages.customPrompt(), {
+      await editMessageTextSafe(ctx, Messages.customPrompt(), {
         parse_mode: 'HTML',
         ...Keyboards.backToMenu()
       });
@@ -67,7 +86,7 @@ export class CallbackHandlers {
       await ctx.answerCbQuery();
       try {
         const domains = await mailService.getDomains();
-        await ctx.editMessageText('🌐 <b>Select a domain for your temporary mailbox:</b>', {
+        await editMessageTextSafe(ctx, '🌐 <b>Select a domain for your temporary mailbox:</b>', {
           parse_mode: 'HTML',
           ...Keyboards.domainList(domains)
         });
@@ -86,7 +105,7 @@ export class CallbackHandlers {
         const account = await mailService.createAccount(null, selectedDomain);
         db.saveAccount(userId, account);
         const text = Messages.emailCreated(account.address);
-        await ctx.editMessageText(text, {
+        await editMessageTextSafe(ctx, text, {
           parse_mode: 'HTML',
           ...Keyboards.emailActiveCard(account.address)
         });
@@ -102,12 +121,12 @@ export class CallbackHandlers {
       const user = db.getUser(userId);
 
       if (!user || !user.accounts || user.accounts.length === 0) {
-        return ctx.editMessageText('📭 You do not have any saved inboxes yet.', {
+        return editMessageTextSafe(ctx, '📭 You do not have any saved inboxes yet.', {
           ...Keyboards.mainMenu()
         });
       }
 
-      await ctx.editMessageText('📜 <b>Your Inboxes:</b>\nSelect an address to set as active:', {
+      await editMessageTextSafe(ctx, '📜 <b>Your Inboxes:</b>\nSelect an address to set as active:', {
         parse_mode: 'HTML',
         ...Keyboards.accountsList(user.accounts, user.activeEmail)
       });
@@ -121,7 +140,7 @@ export class CallbackHandlers {
       await ctx.answerCbQuery(`Switched to ${emailAddress}`);
 
       const text = Messages.emailCreated(emailAddress);
-      await ctx.editMessageText(text, {
+      await editMessageTextSafe(ctx, text, {
         parse_mode: 'HTML',
         ...Keyboards.emailActiveCard(emailAddress)
       });
@@ -144,7 +163,7 @@ export class CallbackHandlers {
       const activeNow = db.getActiveAccount(userId);
       const text = `🗑️ <b>Deleted:</b> <code>${activeAcc.address}</code>\n\nYour inbox has been wiped.`;
 
-      await ctx.editMessageText(text, {
+      await editMessageTextSafe(ctx, text, {
         parse_mode: 'HTML',
         ...Keyboards.mainMenu(activeNow?.address)
       });
@@ -193,7 +212,7 @@ export class CallbackHandlers {
       try {
         await ctx.deleteMessage();
       } catch {
-        await ctx.editMessageText('🗑️ <i>Message deleted.</i>', { parse_mode: 'HTML' });
+        await editMessageTextSafe(ctx, '🗑️ <i>Message deleted.</i>', { parse_mode: 'HTML' });
       }
     });
 
@@ -201,7 +220,7 @@ export class CallbackHandlers {
     bot.action('btn_stats', async (ctx) => {
       await ctx.answerCbQuery();
       const stats = db.getStats();
-      await ctx.editMessageText(Messages.stats(stats), {
+      await editMessageTextSafe(ctx, Messages.stats(stats), {
         parse_mode: 'HTML',
         ...Keyboards.backToMenu()
       });
@@ -210,7 +229,7 @@ export class CallbackHandlers {
     // Help
     bot.action('btn_help', async (ctx) => {
       await ctx.answerCbQuery();
-      await ctx.editMessageText(Messages.help(), {
+      await editMessageTextSafe(ctx, Messages.help(), {
         parse_mode: 'HTML',
         ...Keyboards.backToMenu()
       });
@@ -222,7 +241,7 @@ export class CallbackHandlers {
       const userId = ctx.from.id;
       const activeAcc = db.getActiveAccount(userId);
       const text = Messages.welcome(ctx.from, activeAcc?.address);
-      await ctx.editMessageText(text, {
+      await editMessageTextSafe(ctx, text, {
         parse_mode: 'HTML',
         ...Keyboards.mainMenu(activeAcc?.address)
       });

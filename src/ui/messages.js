@@ -6,6 +6,10 @@ export class Messages {
       .replace(/>/g, '&gt;');
   }
 
+  static getTimeString() {
+    return new Date().toLocaleTimeString('en-US', { hour12: false });
+  }
+
   static welcome(user, activeEmail = null) {
     const name = this.escapeHtml(user.first_name || 'User');
     return `
@@ -32,7 +36,7 @@ ${activeEmail ? `📬 <b>Active Email:</b>\n<code>${activeEmail}</code>\n<i>(Tap
 <code>${address}</code>
 <i>(Tap the address above to copy to clipboard)</i>
 
-⏳ <b>Status:</b> 🟢 Active & Listening for incoming emails...
+⏳ <b>Status:</b> 🟢 Active & Watching for incoming emails...
 💡 <i>Use this address on any website. Verification codes & OTPs will appear here automatically within seconds!</i>
 `.trim();
   }
@@ -73,7 +77,6 @@ ${activeEmail ? `📬 <b>Active Email:</b>\n<code>${activeEmail}</code>\n<i>(Tap
     }
     text += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
-    // Limit fullText to 3500 chars to avoid Telegram 4096 char limit
     const body = (parsed.fullText || '(Empty message)').slice(0, 3500);
     text += this.escapeHtml(body);
 
@@ -81,12 +84,27 @@ ${activeEmail ? `📬 <b>Active Email:</b>\n<code>${activeEmail}</code>\n<i>(Tap
   }
 
   static inboxEmpty(address) {
+    const time = this.getTimeString();
     return `
-📬 <b>Inbox Status:</b>
+📬 <b>Active Disposable Inbox:</b>
 <code>${address}</code>
 
 📭 <b>Inbox is empty.</b>
-No messages received yet. The bot is actively watching this inbox!
+No messages received yet. The bot is actively watching!
+
+⏱️ <i>Last refreshed: ${time}</i>
+`.trim();
+  }
+
+  static inboxList(address, count) {
+    const time = this.getTimeString();
+    return `
+📬 <b>Inbox (${count} message${count > 1 ? 's' : ''}):</b>
+<code>${address}</code>
+
+<i>Latest emails are automatically pushed as notifications.</i>
+
+⏱️ <i>Last refreshed: ${time}</i>
 `.trim();
   }
 
@@ -125,6 +143,7 @@ As soon as the verification email is sent, the bot delivers the <b>OTP code</b> 
 • <code>/new</code> — Generate a new random email
 • <code>/custom &lt;name&gt;</code> — Create custom username
 • <code>/inbox</code> — Refresh active inbox
+• <code>/ping</code> — Check server ping & uptime
 • <code>/delete</code> — Delete current email
 • <code>/stats</code> — View live network stats
 ━━━━━━━━━━━━━━━━━━━━━
