@@ -124,7 +124,7 @@ export class MailService {
   }
 
   /**
-   * Fetches messages from account regardless of provider
+   * Fetches messages from account and automatically filters out system welcome spam
    */
   async getMessages(account) {
     if (!account || !account.token) return [];
@@ -133,7 +133,15 @@ export class MailService {
       try {
         const res = await axios.get(`${this.guerrillaApi}?f=check_email&seq=0&sid_token=${account.token}`, { timeout: 8000 });
         const list = res.data.list || [];
-        return list.map(m => ({
+        
+        // Filter out Guerrilla welcome emails completely so users only see real messages
+        const realMessages = list.filter(m => {
+          const sender = (m.mail_from || '').toLowerCase();
+          const subject = (m.mail_subject || '').toLowerCase();
+          return !sender.includes('guerrillamail') && !subject.includes('welcome to guerrilla');
+        });
+
+        return realMessages.map(m => ({
           id: String(m.mail_id),
           from: { name: m.mail_from, address: m.mail_from },
           subject: m.mail_subject,
