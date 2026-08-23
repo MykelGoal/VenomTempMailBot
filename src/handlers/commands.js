@@ -1,5 +1,6 @@
 import { db } from '../storage/database.js';
 import { mailService } from '../services/mailService.js';
+import { OtpExtractor } from '../services/otpExtractor.js';
 import { Messages } from '../ui/messages.js';
 import { Keyboards } from '../ui/keyboards.js';
 
@@ -86,7 +87,7 @@ export class CommandHandlers {
 
     await ctx.replyWithChatAction('typing');
     try {
-      const messages = await mailService.getMessages(activeAcc.token);
+      const messages = await mailService.getMessages(activeAcc.token, activeAcc.apiBase);
       if (!messages || messages.length === 0) {
         return ctx.reply(Messages.inboxEmpty(activeAcc.address), {
           parse_mode: 'HTML',
@@ -94,9 +95,26 @@ export class CommandHandlers {
         });
       }
 
-      return ctx.reply(`📬 <b>Inbox (${messages.length} message${messages.length > 1 ? 's' : ''}):</b>\n<code>${activeAcc.address}</code>\n\nLatest messages will appear here as notifications.`, {
+      // Check if any message is unseen and notify
+      for (const m of messages) {
+        if (!db.isMessageSeen(m.id)) {
+          const fullMsg = await mailService.getMessageDetails(activeAcc.token, m.id, activeAcc.apiBase);
+          if (fullMsg) {
+            const parsed = OtpExtractor.parseEmail(fullMsg);
+            db.markMessageSeen(m.id);
+            if (parsed.otp) db.incrementOtpCount();
+            const notifText = Messages.newEmailNotification(activeAcc.address, parsed);
+            await ctx.reply(notifText, {
+              parse_mode: 'HTML',
+              ...Keyboards.emailActions(parsed)
+            });
+          }
+        }
+      }
+
+      return ctx.reply(Messages.inboxList(activeAcc.address, messages.length), {
         parse_mode: 'HTML',
-        ...Keyboards.emailActiveCard(activeAcc.address)
+        ...Keyboards.inboxMessagesList(messages)
       });
     } catch (err) {
       return ctx.reply(`❌ <b>Failed to check inbox:</b> ${err.message}`, {
@@ -113,7 +131,7 @@ export class CommandHandlers {
       return ctx.reply('⚠️ No active email to delete.');
     }
 
-    mailService.deleteAccount(activeAcc.token, activeAcc.id).catch(() => {});
+    mailService.deleteAccount(activeAcc.token, activeAcc.id, activeAcc.apiBase).catch(() => {});
     db.deleteAccount(userId, activeAcc.address);
 
     return ctx.reply(`🗑️ <b>Deleted:</b> <code>${activeAcc.address}</code>\n\nYour inbox has been wiped.`, {

@@ -61,14 +61,12 @@ export class Keyboards {
   static emailActions(parsed) {
     const rows = [];
 
-    // If there is a verification link, add an external URL button (safe URL validation)
     if (parsed.verifyLink && (parsed.verifyLink.startsWith('http://') || parsed.verifyLink.startsWith('https://'))) {
       rows.push([
         Markup.button.url('🔗 1-Tap Verify Link', parsed.verifyLink)
       ]);
     }
 
-    // Message ID is 24-char hex, safely fits Telegram 64-byte limit
     rows.push([
       Markup.button.callback('📄 View Full Email', `btn_view_${parsed.id}`),
       Markup.button.callback('🗑️ Delete', `btn_del_${parsed.id}`)
@@ -76,6 +74,33 @@ export class Keyboards {
 
     rows.push([
       Markup.button.callback('📬 Back to Inbox', 'btn_refresh_inbox')
+    ]);
+
+    return Markup.inlineKeyboard(rows);
+  }
+
+  /**
+   * Action buttons for listing messages found in inbox
+   */
+  static inboxMessagesList(messages = []) {
+    const rows = [];
+
+    // Add button for each email in inbox (up to 5 recent)
+    for (const m of messages.slice(0, 5)) {
+      const subject = m.subject || '(No Subject)';
+      const cleanSubject = subject.length > 22 ? subject.slice(0, 22) + '...' : subject;
+      rows.push([
+        Markup.button.callback(`📩 ${cleanSubject}`, `btn_view_${m.id}`)
+      ]);
+    }
+
+    rows.push([
+      Markup.button.callback('🔄 Refresh Inbox', 'btn_refresh_inbox'),
+      Markup.button.callback('⚡ Generate New', 'btn_generate_random')
+    ]);
+
+    rows.push([
+      Markup.button.callback('⬅️ Back to Menu', 'btn_main_menu')
     ]);
 
     return Markup.inlineKeyboard(rows);

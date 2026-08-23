@@ -80,7 +80,6 @@ async function bootstrap() {
 
   const server = app.listen(config.port, '0.0.0.0', () => {
     console.log(`🌐 Uptime/Keep-Alive server listening on http://0.0.0.0:${config.port}`);
-    console.log(`🔗 UptimeRobot Target URL: http://<your-host>:${config.port}/ping`);
   });
 
   // 4. Auto Self-Ping Keep-Alive Worker (for Render/Koyeb free tiers)
@@ -97,15 +96,12 @@ async function bootstrap() {
     }, 10 * 60 * 1000); // 10 minutes
   }
 
-  // 5. Start Bot & Poller if valid token
+  // 5. Start Bot & Poller
   if (config.botToken && config.botToken !== 'DUMMY_TOKEN_FOR_INITIALIZATION') {
-    try {
-      await bot.launch();
-      console.log('🤖 Telegram Bot connected successfully!');
-      poller.start();
-    } catch (err) {
-      console.error('❌ Failed to launch Telegram Bot:', err.message);
-    }
+    poller.start();
+    bot.launch()
+      .then(() => console.log('🤖 Telegram Bot connected and listening!'))
+      .catch((err) => console.error('❌ Failed to launch Telegram Bot:', err.message));
   } else {
     console.log('ℹ️ Bot token missing or dummy. Server running in standby mode.');
   }

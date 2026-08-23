@@ -4,15 +4,12 @@ import { OtpExtractor } from '../services/otpExtractor.js';
 import { Messages } from '../ui/messages.js';
 import { Keyboards } from '../ui/keyboards.js';
 
-/**
- * Safely edits message text and ignores Telegram's 'message is not modified' error.
- */
 async function editMessageTextSafe(ctx, text, extra = {}) {
   try {
     return await ctx.editMessageText(text, extra);
   } catch (err) {
     if (err.message && err.message.includes('message is not modified')) {
-      return; // Safe to ignore
+      return;
     }
     throw err;
   }
@@ -50,20 +47,38 @@ export class CallbackHandlers {
       }
 
       try {
-        const messages = await mailService.getMessages(activeAcc.token);
+        const messages = await mailService.getMessages(activeAcc.token, activeAcc.apiBase);
         const time = new Date().toLocaleTimeString('en-US', { hour12: false });
         
         if (!messages || messages.length === 0) {
-          await ctx.answerCbQuery(`📭 Inbox checked at ${time} (Empty)`);
+          await ctx.answerCbQuery(`📭 Checked at ${time} (Empty)`);
           await editMessageTextSafe(ctx, Messages.inboxEmpty(activeAcc.address), {
             parse_mode: 'HTML',
             ...Keyboards.emailActiveCard(activeAcc.address)
           });
         } else {
           await ctx.answerCbQuery(`📬 ${messages.length} message(s) in inbox`);
+
+          // Deliver any unseen message immediately
+          for (const m of messages) {
+            if (!db.isMessageSeen(m.id)) {
+              const fullMsg = await mailService.getMessageDetails(activeAcc.token, m.id, activeAcc.apiBase);
+              if (fullMsg) {
+                const parsed = OtpExtractor.parseEmail(fullMsg);
+                db.markMessageSeen(m.id);
+                if (parsed.otp) db.incrementOtpCount();
+                const notifText = Messages.newEmailNotification(activeAcc.address, parsed);
+                await ctx.reply(notifText, {
+                  parse_mode: 'HTML',
+                  ...Keyboards.emailActions(parsed)
+                });
+              }
+            }
+          }
+
           await editMessageTextSafe(ctx, Messages.inboxList(activeAcc.address, messages.length), {
             parse_mode: 'HTML',
-            ...Keyboards.emailActiveCard(activeAcc.address)
+            ...Keyboards.inboxMessagesList(messages)
           });
         }
       } catch (err) {
@@ -135,7 +150,7 @@ export class CallbackHandlers {
       });
     });
 
-    // Switch Active Account by Account ID
+    // Switch Active Account by ID
     bot.action(/^btn_sw_(.+)$/, async (ctx) => {
       const accountId = ctx.match[1];
       const userId = ctx.from.id;
@@ -167,7 +182,7 @@ export class CallbackHandlers {
       }
 
       await ctx.answerCbQuery('Deleting...');
-      mailService.deleteAccount(activeAcc.token, activeAcc.id).catch(() => {});
+      mailService.deleteAccount(activeAcc.token, activeAcc.id, activeAcc.apiBase).catch(() => {});
       db.deleteAccount(userId, activeAcc.address);
 
       const activeNow = db.getActiveAccount(userId);
@@ -191,7 +206,7 @@ export class CallbackHandlers {
 
       await ctx.answerCbQuery('Loading full email...');
       try {
-        const fullMsg = await mailService.getMessageDetails(activeAcc.token, msgId);
+        const fullMsg = await mailService.getMessageDetails(activeAcc.token, msgId, activeAcc.apiBase);
         if (!fullMsg) {
           return ctx.reply('⚠️ Message is no longer available on the server.');
         }
@@ -205,7 +220,6 @@ export class CallbackHandlers {
             ...Keyboards.emailActions(parsed)
           });
         } catch (sendErr) {
-          // Plain text fallback if HTML parsing fails
           const plain = `📄 FULL EMAIL CONTENT\n\nFrom: ${parsed.sender}\nSubject: ${parsed.subject}\nDate: ${new Date(parsed.createdAt).toLocaleString()}\n\n${parsed.fullText.slice(0, 2800)}`;
           await ctx.reply(plain, Keyboards.emailActions(parsed));
         }
@@ -221,7 +235,7 @@ export class CallbackHandlers {
       const activeAcc = db.getActiveAccount(userId);
 
       if (activeAcc) {
-        mailService.deleteMessage(activeAcc.token, msgId).catch(() => {});
+        mailService.deleteMessage(activeAcc.token, msgId, activeAcc.apiBase).catch(() => {});
       }
 
       await ctx.answerCbQuery('Message deleted');

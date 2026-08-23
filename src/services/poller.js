@@ -15,7 +15,7 @@ export class InboxPoller {
   start() {
     if (this.isRunning) return;
     this.isRunning = true;
-    console.log(`[Poller] Live inbox watcher started (Interval: ${config.pollIntervalMs}ms)`);
+    console.log(`[Poller] Live inbox watchdog active (Polling interval: ${config.pollIntervalMs}ms)`);
     this.tick();
   }
 
@@ -31,7 +31,7 @@ export class InboxPoller {
     try {
       await this.pollAllActiveInboxes();
     } catch (err) {
-      console.error('[Poller] Error in poll loop:', err.message);
+      console.error('[Poller] Error in poll cycle:', err.message);
     } finally {
       if (this.isRunning) {
         this.timer = setTimeout(() => this.tick(), config.pollIntervalMs);
@@ -43,7 +43,7 @@ export class InboxPoller {
     const activeAccounts = db.getAllActiveAccounts();
     if (!activeAccounts || activeAccounts.length === 0) return;
 
-    // Process in batches of 5
+    // Process in batches
     const batchSize = 5;
     for (let i = 0; i < activeAccounts.length; i += batchSize) {
       const batch = activeAccounts.slice(i, i + batchSize);
@@ -53,14 +53,14 @@ export class InboxPoller {
 
   async checkUserInbox(account) {
     try {
-      const messages = await mailService.getMessages(account.token);
+      const messages = await mailService.getMessages(account.token, account.apiBase);
       if (!messages || messages.length === 0) return;
 
       for (const msgSummary of messages) {
         if (db.isMessageSeen(msgSummary.id)) continue;
 
         // Fetch full email content
-        const fullMsg = await mailService.getMessageDetails(account.token, msgSummary.id);
+        const fullMsg = await mailService.getMessageDetails(account.token, msgSummary.id, account.apiBase);
         if (!fullMsg) continue;
 
         // Parse with OTP Extractor
@@ -75,7 +75,7 @@ export class InboxPoller {
         const text = Messages.newEmailNotification(account.address, parsed);
         const keyboard = Keyboards.emailActions(parsed);
 
-        // Send to user with fallback in case of HTML entity parser edge-cases
+        // Send to user with fallback
         try {
           await this.bot.telegram.sendMessage(account.userId, text, {
             parse_mode: 'HTML',
@@ -83,13 +83,10 @@ export class InboxPoller {
             ...keyboard
           });
         } catch (sendErr) {
-          // If HTML entity failed, retry in plain text
           if (sendErr.message && sendErr.message.includes("can't parse entities")) {
-            console.warn('[Poller] HTML entity issue, falling back to plain text delivery...');
             const plainText = `⚡ NEW EMAIL RECEIVED\n\nTo: ${account.address}\nFrom: ${parsed.sender}\nSubject: ${parsed.subject}\n${parsed.otp ? `\n🔑 OTP: ${parsed.otp}\n` : ''}\nSnippet:\n${parsed.preview}`;
             await this.bot.telegram.sendMessage(account.userId, plainText, { ...keyboard });
           } else if (sendErr.response?.error_code === 403) {
-            // User blocked the bot
             console.warn(`[Poller] User ${account.userId} blocked the bot. Skipping.`);
             return;
           } else {
@@ -100,10 +97,10 @@ export class InboxPoller {
         console.log(`[Poller] Dispatched new email to user ${account.userId} (OTP: ${parsed.otp || 'None'})`);
       }
     } catch (err) {
-      if (err.message === 'UNAUTHORIZED' || err.response?.status === 401) {
+      if (err.message === 'UNAUTHORIZED') {
         console.warn(`[Poller] Token expired for ${account.address}.`);
       } else {
-        console.error(`[Poller] Failed inbox check for ${account.address}:`, err.message);
+        console.error(`[Poller] Inbox check failed for ${account.address}:`, err.message);
       }
     }
   }
