@@ -1,0 +1,32 @@
+{
+  "name": "venom-tempmail-bot",
+  "version": "1.0.0",
+  "description": "⚡ VENOM TempMail — 1-Click Disposable Email & Instant OTP Extractor Bot for Telegram",
+  "type": "module",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js",
+    "dev": "node --watch src/bot.js"
+  },
+  "keywords": [
+    "telegram-bot",
+    "temp-mail",
+    "disposable-email",
+    "otp-extractor",
+    "verification-code",
+    "telegraf",
+    "venom-bot"
+  ],
+  "author": "MR VENOM (MykelGoal)",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "html-to-text": "^9.0.5",
+    "telegraf": "^4.16.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
