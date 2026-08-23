@@ -8,14 +8,14 @@ export class MailService {
     this.mailGwApi = config.backupMailApiBase; // https://api.mail.gw
     this.guerrillaApi = 'https://api.guerrillamail.com/ajax.php';
     
-    // Built-in domains across networks
+    // Stealth-first domain list
     this.allDomains = [
       'sharklasers.com',
-      'guerrillamail.com',
-      'grr.la',
-      'pokemail.net',
+      'westcast-systems.com',
       'emalupe.com',
-      'westcast-systems.com'
+      'pokemail.net',
+      'grr.la',
+      'guerrillamail.com'
     ];
   }
 
@@ -46,7 +46,7 @@ export class MailService {
   }
 
   /**
-   * GuerrillaMail Account Generator
+   * GuerrillaMail Account Generator (Stealth)
    */
   async createGuerrillaAccount(customUsername, domain = 'sharklasers.com') {
     try {
@@ -54,14 +54,12 @@ export class MailService {
       const sid = res.data.sid_token;
       let email = res.data.email_addr;
 
-      // If user requested custom username
       if (customUsername) {
         const cleanUser = customUsername.toLowerCase().replace(/[^a-z0-9._-]/g, '').slice(0, 30);
         const setRes = await axios.get(`${this.guerrillaApi}?f=set_email_user&email_user=${cleanUser}&sid_token=${sid}`, { timeout: 8000 });
         email = setRes.data.email_addr;
       }
 
-      // Replace domain if a specific guerrilla domain was requested
       const userPrefix = email.split('@')[0];
       const finalAddress = `${userPrefix}@${domain}`;
 
@@ -75,7 +73,7 @@ export class MailService {
         createdAt: Date.now()
       };
     } catch (err) {
-      throw new Error(`Failed to create GuerrillaMail inbox: ${err.message}`);
+      throw new Error(`Failed to create inbox on @${domain}: ${err.message}`);
     }
   }
 
@@ -135,7 +133,6 @@ export class MailService {
       try {
         const res = await axios.get(`${this.guerrillaApi}?f=check_email&seq=0&sid_token=${account.token}`, { timeout: 8000 });
         const list = res.data.list || [];
-        // Map Guerrilla messages to standard shape
         return list.map(m => ({
           id: String(m.mail_id),
           from: { name: m.mail_from, address: m.mail_from },
@@ -150,7 +147,6 @@ export class MailService {
       }
     }
 
-    // REST Providers (mail.tm / mail.gw)
     const base = account.apiBase || (account.provider === 'mailgw' ? this.mailGwApi : this.mailTmApi);
     try {
       const res = await axios.get(`${base}/messages`, {
@@ -232,7 +228,7 @@ export class MailService {
    */
   async deleteAccount(account) {
     if (!account) return false;
-    if (account.provider === 'guerrillamail') return true; // auto-expires
+    if (account.provider === 'guerrillamail') return true;
     const base = account.apiBase || (account.provider === 'mailgw' ? this.mailGwApi : this.mailTmApi);
     try {
       await axios.delete(`${base}/accounts/${account.id}`, {
