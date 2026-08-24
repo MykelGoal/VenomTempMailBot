@@ -10,6 +10,14 @@ export class CommandHandlers {
     const username = ctx.from.username || ctx.from.first_name || '';
     db.getOrCreateUser(userId, username);
 
+    // YouTube Subscription Gate Check
+    if (!db.isUserVerified(userId)) {
+      return ctx.reply(Messages.verifySubscriptionRequired(), {
+        parse_mode: 'HTML',
+        ...Keyboards.subscriptionGate()
+      });
+    }
+
     const activeAcc = db.getActiveAccount(userId);
     const text = Messages.welcome(ctx.from, activeAcc?.address);
     const keyboard = Keyboards.mainMenu(activeAcc?.address);
@@ -22,6 +30,14 @@ export class CommandHandlers {
 
   static async handleNew(ctx) {
     const userId = ctx.from.id;
+
+    if (!db.isUserVerified(userId)) {
+      return ctx.reply(Messages.verifySubscriptionRequired(), {
+        parse_mode: 'HTML',
+        ...Keyboards.subscriptionGate()
+      });
+    }
+
     await ctx.replyWithChatAction('typing');
 
     try {
@@ -45,6 +61,14 @@ export class CommandHandlers {
 
   static async handleCustom(ctx) {
     const userId = ctx.from.id;
+
+    if (!db.isUserVerified(userId)) {
+      return ctx.reply(Messages.verifySubscriptionRequired(), {
+        parse_mode: 'HTML',
+        ...Keyboards.subscriptionGate()
+      });
+    }
+
     const text = ctx.message.text || '';
     const parts = text.split(' ').slice(1);
     const customPrefix = parts.join('').trim();
@@ -77,6 +101,14 @@ export class CommandHandlers {
 
   static async handleInbox(ctx) {
     const userId = ctx.from.id;
+
+    if (!db.isUserVerified(userId)) {
+      return ctx.reply(Messages.verifySubscriptionRequired(), {
+        parse_mode: 'HTML',
+        ...Keyboards.subscriptionGate()
+      });
+    }
+
     const activeAcc = db.getActiveAccount(userId);
 
     if (!activeAcc) {

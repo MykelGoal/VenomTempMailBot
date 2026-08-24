@@ -17,6 +17,31 @@ async function editMessageTextSafe(ctx, text, extra = {}) {
 
 export class CallbackHandlers {
   static async register(bot) {
+    // YouTube Verification Gate Callback
+    bot.action('btn_verify_sub', async (ctx) => {
+      const userId = ctx.from.id;
+      db.verifyUser(userId);
+      await ctx.answerCbQuery('🎉 Access Unlocked! Welcome to VENOM.');
+
+      const activeAcc = db.getActiveAccount(userId);
+      const text = `${Messages.verifiedSuccess()}\n\n${Messages.welcome(ctx.from, activeAcc?.address)}`;
+
+      await editMessageTextSafe(ctx, text, {
+        parse_mode: 'HTML',
+        ...Keyboards.mainMenu(activeAcc?.address)
+      });
+    });
+
+    // Explore VENOM Series
+    bot.action('btn_venom_series', async (ctx) => {
+      await ctx.answerCbQuery();
+      await editMessageTextSafe(ctx, Messages.exploreVenomSeries(), {
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+        ...Keyboards.exploreSeries()
+      });
+    });
+
     // Generate Random
     bot.action('btn_generate_random', async (ctx) => {
       await ctx.answerCbQuery('⚡ Provisioning email...');

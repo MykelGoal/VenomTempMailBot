@@ -37,7 +37,47 @@ export class Messages {
   }
 
   /**
-   * Main Dashboard Welcome Card (Minimalist)
+   * YouTube Subscription Gate Card
+   */
+  static verifySubscriptionRequired() {
+    return `
+⚡ <b>VENOM VERIFICATION REQUIRED</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+To access <b>VENOM TempMail</b> for free, please support our YouTube channel!
+
+1️⃣ Click the <b>🔴 Subscribe on YouTube</b> button below.
+2️⃣ Tap <b>✅ I Have Subscribed / Unlock Bot</b> to gain full access!
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+<i>Thank you for supporting the VENOM ecosystem!</i>
+`.trim();
+  }
+
+  static verifiedSuccess() {
+    return `
+🎉 <b>ACCESS UNLOCKED!</b>
+
+Thank you for subscribing to <b>@venommdbot</b>!
+Your disposable email engine is now active.
+`.trim();
+  }
+
+  static exploreVenomSeries() {
+    return `
+⚡ <b>THE VENOM BOT SERIES</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+📬 <b>@VenomTempMailBot</b> — 1-Click Temp Mail & Instant OTP
+🎮 <b>@VenomFreeFireBot</b> — 0–200 Sensi & Diamond Store
+🚀 <b>@VenomPulseBot</b> — Universal HD Video & Music Downloader
+⚽ <b>@VenomPredictBot</b> — Live Match Scores & Predictions
+💬 <b>@VenomMDBot</b> — WhatsApp Multi-Device 600+ Plugin Bot
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+📺 <b>YouTube:</b> <a href="https://youtube.com/@venommdbot">youtube.com/@venommdbot</a>
+⭐ <b>GitHub:</b> <a href="https://github.com/MykelGoal">github.com/MykelGoal</a>
+`.trim();
+  }
+
+  /**
+   * Main Dashboard Welcome Card
    */
   static welcome(user, activeEmail = null) {
     const name = this.escapeHtml(user?.first_name || 'User');
@@ -51,7 +91,7 @@ ${activeEmail ? `📬 <code>${this.escapeHtml(activeEmail)}</code>\n<i>(Tap to c
   }
 
   /**
-   * New Email Address Created (Minimalist)
+   * New Email Address Created
    */
   static emailCreated(address) {
     const safeAddress = this.escapeHtml(address);
@@ -66,13 +106,12 @@ ${activeEmail ? `📬 <code>${this.escapeHtml(activeEmail)}</code>\n<i>(Tap to c
   }
 
   /**
-   * Incoming Email Notification Card (Ultra-Clean & Minimal)
+   * Incoming Email Notification Card
    */
   static newEmailNotification(address, parsed) {
     const sender = this.cleanSender(parsed.sender);
     const subject = this.escapeHtml(parsed.subject || '(No Subject)');
 
-    // 1. If OTP exists, show the code front-and-center
     if (parsed.otp) {
       return `
 ⚡ <b>VENOM OTP CODE</b>
@@ -84,7 +123,6 @@ ${activeEmail ? `📬 <code>${this.escapeHtml(activeEmail)}</code>\n<i>(Tap to c
 `.trim();
     }
 
-    // 2. If Verification Link exists (without OTP)
     if (parsed.verifyLink) {
       return `
 ⚡ <b>VENOM VERIFICATION</b>
@@ -96,7 +134,6 @@ ${activeEmail ? `📬 <code>${this.escapeHtml(activeEmail)}</code>\n<i>(Tap to c
 `.trim();
     }
 
-    // 3. Standard Email
     return `
 ⚡ <b>VENOM NEW EMAIL</b>
 
@@ -108,7 +145,7 @@ ${activeEmail ? `📬 <code>${this.escapeHtml(activeEmail)}</code>\n<i>(Tap to c
   }
 
   /**
-   * Full Email Content View (Clean)
+   * Full Email Content View
    */
   static fullEmailView(parsed) {
     const sender = this.cleanSender(parsed.sender);

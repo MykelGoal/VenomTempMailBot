@@ -5,7 +5,7 @@ class Database {
   constructor(filePath = './data/database.json') {
     this.filePath = filePath;
     this.data = {
-      users: {},       // userId -> { id, username, activeEmail, accounts: [], createdAt, lastSeen }
+      users: {},       // userId -> { id, username, isVerified, activeEmail, accounts: [], createdAt, lastSeen }
       messagesSeen: {}, // messageId -> timestamp
       stats: {
         totalEmailsGenerated: 0,
@@ -54,8 +54,9 @@ class Database {
       this.data.users[id] = {
         id,
         username,
+        isVerified: false,
         activeEmail: null,
-        accounts: [], // { address, password, token, id, createdAt }
+        accounts: [],
         createdAt: Date.now(),
         lastSeen: Date.now()
       };
@@ -67,9 +68,20 @@ class Database {
     return this.data.users[id];
   }
 
+  isUserVerified(userId) {
+    const user = this.getUser(userId);
+    return Boolean(user && user.isVerified);
+  }
+
+  verifyUser(userId) {
+    const user = this.getOrCreateUser(userId);
+    user.isVerified = true;
+    this.save();
+    return user;
+  }
+
   saveAccount(userId, accountData) {
     const user = this.getOrCreateUser(userId);
-    // remove existing if address already exists
     user.accounts = user.accounts.filter(a => a.address !== accountData.address);
     user.accounts.unshift(accountData);
     user.activeEmail = accountData.address;
@@ -127,7 +139,6 @@ class Database {
   markMessageSeen(messageId) {
     this.data.messagesSeen[messageId] = Date.now();
     this.data.stats.totalMessagesReceived++;
-    // Clean old seen message IDs older than 7 days
     const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
     for (const [id, ts] of Object.entries(this.data.messagesSeen)) {
       if (ts < cutoff) delete this.data.messagesSeen[id];

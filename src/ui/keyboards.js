@@ -28,11 +28,39 @@ export class Keyboards {
     }
 
     buttons.push([
-      Markup.button.callback('📊 Network Stats', 'btn_stats'),
-      Markup.button.callback('❓ Usage Guide', 'btn_help')
+      Markup.button.callback('⚡ Explore VENOM Bots', 'btn_venom_series'),
+      Markup.button.callback('📊 Stats', 'btn_stats')
     ]);
 
     return Markup.inlineKeyboard(buttons);
+  }
+
+  /**
+   * YouTube Subscription Gate Keyboard
+   */
+  static subscriptionGate() {
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.url('🔴 Subscribe on YouTube (@venommdbot)', 'https://www.youtube.com/@venommdbot?sub_confirmation=1')
+      ],
+      [
+        Markup.button.callback('✅ I Have Subscribed / Unlock Bot', 'btn_verify_sub')
+      ]
+    ]);
+  }
+
+  /**
+   * Explore VENOM Series Actions
+   */
+  static exploreSeries() {
+    return Markup.inlineKeyboard([
+      [
+        Markup.button.url('📺 Subscribe on YouTube (@venommdbot)', 'https://www.youtube.com/@venommdbot?sub_confirmation=1')
+      ],
+      [
+        Markup.button.callback('⬅️ Back to Menu', 'btn_main_menu')
+      ]
+    ]);
   }
 
   /**
@@ -61,7 +89,6 @@ export class Keyboards {
   static emailActions(parsed) {
     const rows = [];
 
-    // 1. Primary Action Link Button (Top Priority)
     if (parsed.verifyLink && (parsed.verifyLink.startsWith('http://') || parsed.verifyLink.startsWith('https://'))) {
       const label = parsed.linkLabel || '🔗 1-Tap Verify Link';
       rows.push([
@@ -69,7 +96,6 @@ export class Keyboards {
       ]);
     }
 
-    // 2. Secondary Actions
     rows.push([
       Markup.button.callback('📖 Full Email', `btn_view_${parsed.id}`),
       Markup.button.callback('🗑️ Delete', `btn_del_${parsed.id}`)
